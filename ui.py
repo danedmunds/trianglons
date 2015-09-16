@@ -10,26 +10,39 @@ DISPLAY_HEIGHT = 800
 
 OFFSET = 20
 
-class DownTriangle:
-    def __init__(self, top_left_corner):
+class Triangle(object):
+    def __init__(self):
         self.visible = False
         self.hover = False
+        self.touch = False
         self.middle_number = None
+
+    def draw(self, display_surface):
+        if not self.visible and not self.hover:
+            return
+
+        color = (0, 0, 0)
+        width = 1
+
+        if self.touch:
+            color = (255, 127, 127)
+            width = 0
+        elif self.hover:
+            width = 3
+
+        pygame.draw.polygon(display_surface, color, self.get_coordinates(), width)
+
+
+class DownTriangle(Triangle):
+    def __init__(self, top_left_corner):
+        super(self.__class__, self).__init__()
         self.top_left_corner = top_left_corner
         self.top_right_corner = (top_left_corner[0] + TRIANGLE_EDGE, top_left_corner[1])
         self.bottom_corner = (top_left_corner[0] + TRIANGLE_EDGE / 2, top_left_corner[1] + TRIANGLE_HEIGHT)
         self.numbers = {}
 
-    def draw(self):
-        if not self.visible and not self.hover:
-            return
-        color = (0, 0, 0)
-        width = 1
-
-        if self.hover:
-            width = 3
-
-        pygame.draw.polygon(DISPLAYSURF, color, (self.top_left_corner, self.top_right_corner, self.bottom_corner), width)
+    def get_coordinates(self):
+        return self.top_left_corner, self.top_right_corner, self.bottom_corner
 
     def point_is_in(self, point):
         left_slope = (self.bottom_corner[1] - self.top_left_corner[1]) / (self.bottom_corner[0] - self.top_left_corner[0])
@@ -38,30 +51,19 @@ class DownTriangle:
         right_slope = (self.top_right_corner[1] - self.bottom_corner[1]) / (self.top_right_corner[0] - self.bottom_corner[0])
         y_projection_on_right_line = right_slope * point[0] + self.top_right_corner[1] - right_slope * self.top_right_corner[0]
 
-        return y_projection_on_left_line >= point[1] and y_projection_on_right_line >= point[1] and point[1] >= self.top_left_corner[1]
+        return y_projection_on_left_line >= point[1] and y_projection_on_right_line >= point[1] >= self.top_left_corner[1]
 
 
-class UpTriangle:
+class UpTriangle(Triangle):
     def __init__(self, top):
-        self.visible = False
-        self.hover = False
-        self.middle_number = None
+        super(self.__class__, self).__init__()
         self.top_corner = top
         self.bottom_left_corner = (top[0] - TRIANGLE_EDGE / 2, top[1] + TRIANGLE_HEIGHT)
         self.bottom_right_corner = (top[0] + TRIANGLE_EDGE / 2, top[1] + TRIANGLE_HEIGHT)
         self.numbers = {}
 
-    def draw(self):
-        if not self.visible and not self.hover:
-            return
-
-        color = (0, 0, 0)
-        width = 1
-
-        if self.hover:
-            width = 3
-
-        pygame.draw.polygon(DISPLAYSURF, color, (self.top_corner, self.bottom_right_corner, self.bottom_left_corner), width)
+    def get_coordinates(self):
+        return self.top_corner, self.bottom_right_corner, self.bottom_left_corner
 
     def point_is_in(self, point):
         left_slope = (self.top_corner[1] - self.bottom_left_corner[1]) / (self.top_corner[0] - self.bottom_left_corner[0])
@@ -70,13 +72,12 @@ class UpTriangle:
         right_slope = (self.bottom_right_corner[1] - self.top_corner[1]) / (self.bottom_right_corner[0] - self.top_corner[0])
         y_projection_on_right_line = right_slope * point[0] + self.top_corner[1] - right_slope * self.top_corner[0]
 
-        return y_projection_on_left_line <= point[1] and y_projection_on_right_line <= point[1] and point[1] <= self.bottom_left_corner[1]
+        return y_projection_on_left_line <= point[1] and y_projection_on_right_line <= point[1] <= self.bottom_left_corner[1]
 
 
 def determine_where(position):
     x = int((position[0] - OFFSET) / TRIANGLE_EDGE)
     y = int((position[1] - OFFSET) / TRIANGLE_HEIGHT)
-    print '{0}, {1}'.format(x, y)
     for row in triangles:
         for triangle in row:
             if triangle.point_is_in(position):
@@ -93,7 +94,7 @@ def get_triangle_at(position):
 def draw_triangles():
     for row in triangles:
         for triangle in row:
-            triangle.draw()
+            triangle.draw(DISPLAYSURF)
 
 
 pygame.init()
@@ -109,6 +110,7 @@ triangle_rows = int((DISPLAY_HEIGHT / TRIANGLE_HEIGHT) - 1)
 
 triangles = []
 previous_hover = None
+previous_touch = None
 
 row_start_down = True
 for row in range(0, triangle_rows):
@@ -132,25 +134,46 @@ for row in range(0, triangle_rows):
     else:
         cursor = (OFFSET, cursor[1] + TRIANGLE_HEIGHT)
 
+
+def quit():
+    pygame.quit()
+    sys.exit()
+
+
+def mouse_motion(event):
+    global previous_hover
+    triangle_at_position = get_triangle_at(event.pos)
+    
+    if previous_hover is not None:
+        previous_hover.hover = False
+    if triangle_at_position is not None:
+        triangle_at_position.hover = True
+    previous_hover = triangle_at_position
+
+
+def mouse_down(event):
+    global previous_touch
+    triangle_at_position = get_triangle_at(event.pos)
+
+    if previous_touch is not None and previous_touch != triangle_at_position:
+        previous_touch.touch = False
+    if triangle_at_position is not None:
+        triangle_at_position.touch = not triangle_at_position.touch
+        triangle_at_position.visible = not triangle_at_position.visible
+        previous_touch = triangle_at_position
+
+
 while True:  # main game loop
     DISPLAYSURF.fill((255, 255, 255))
     draw_triangles()
 
     for event in pygame.event.get():
         if event.type == pygame.locals.QUIT:
-            pygame.quit()
-            sys.exit()
+            quit()
         elif event.type == pygame.locals.MOUSEMOTION:
-            triangle_at_position = get_triangle_at(event.pos)
-            if previous_hover != None:
-                previous_hover.hover = False
-            if triangle_at_position != None:
-                triangle_at_position.hover = True
-
-            previous_hover = triangle_at_position
+            mouse_motion(event)
         elif event.type == pygame.locals.MOUSEBUTTONDOWN:
-            triangle_at_position = get_triangle_at(event.pos)
-            if triangle_at_position != None:
-                triangle_at_position.visible = True
+            mouse_down(event)
+
     pygame.display.update()
 
